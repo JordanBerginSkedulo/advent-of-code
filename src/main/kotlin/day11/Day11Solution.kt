@@ -51,7 +51,7 @@ data class Monkey(
     var inspections: Long = 0L
 }
 
-fun deserializedInput(): List<Monkey> = input.split("\n\n")
+private fun deserializedInput(): List<Monkey> = input.split("\n\n")
     .map { monkeyData ->
         val lines = monkeyData.split("\n")
         val number = lines[0].substringAfter(" ").substringBefore(":").toLong()
