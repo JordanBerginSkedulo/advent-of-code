@@ -3,72 +3,82 @@ package day14
 import kotlin.math.max
 import kotlin.math.min
 
-
 fun main() {
     solution1().also(::println)
     solution2().also(::println)
 }
 
-private fun solution1(): Int = solution { matrix ->
-    matrix[matrix.size - 2].contains("O")
-}.let { it - 1 /* don't count the one that fell to the bottom */ }
+private fun solution1(): Int {
+    val matrix = deserializedInput()
+    val lowestPoint = matrix.values.flatMap { it.keys }.max()
 
-private fun solution2(): Int = solution { matrix ->
-    matrix.first().contains("O")
+    return matrix.simulateUntil { _, y ->
+        y > lowestPoint
+    }.values
+        .flatMap { it.values }
+        .count { it == "O" }
 }
 
-private fun solution(terminalCondition: (List<List<String>>) -> Boolean): Int {
-    val matrix = deserializedInput()
-    val sandDropY = matrix.indexOfFirst { it.contains("+") }
-    val sandDropX = matrix[sandDropY].indexOfFirst { it == "+" }
+private fun solution2(): Int {
+    val matrix = deserializedInput().addWideFloor(5000, 2)
+    return matrix.simulateUntil { _, _ ->
+        matrix[500]?.get(0) == "O"
+    }.values
+        .flatMap { it.values }
+        .count { it == "O" }
+}
 
-    tailrec fun dropSand(x: Int, y: Int) {
+private fun Matrix.simulateUntil(terminalCondition: (x: Int, y: Int) -> Boolean): Matrix {
+    val sandDropY = 0
+    val sandDropX = 500
+
+    tailrec fun dropSand(x: Int, y: Int): Matrix {
+        if (terminalCondition(x, y)) return this
+
         val nextY = y + 1
-        val yLevel = matrix[nextY]
 
         return when {
-            yLevel[x] == "." -> dropSand(x, nextY)
-            yLevel[x - 1] == "." -> dropSand(x - 1, nextY)
-            yLevel[x + 1] == "." -> dropSand(x + 1, nextY)
+            get(x, nextY) == null -> dropSand(x, nextY)
+            get(x - 1, nextY) == null -> dropSand(x - 1, nextY)
+            get(x + 1, nextY) == null -> dropSand(x + 1, nextY)
             else -> {
-                matrix[y][x] = "O"
-                if (terminalCondition(matrix)) Unit else dropSand(sandDropX, sandDropY)
+                put(x, y, "O")
+                dropSand(sandDropX, sandDropY)
             }
         }
     }
 
-    dropSand(sandDropX, sandDropY)
-
-    return matrix.flatten().count { it == "O" }
+    return dropSand(sandDropX, sandDropY)
 }
 
-private fun deserializedInput(): List<MutableList<String>> {
-    val rockPositions = input.split("\n")
-        .flatMap { line ->
-            line.split(" -> ").map {
-                it.substringBefore(",").toInt() to it.substringAfter(",").toInt()
-            }.windowed(2, 1)
-                .flatMap {
-                    it[0].coordinatesBetween(it[1])
-                }
-        }.toSet()
-
-    val leftWall = rockPositions.minBy { it.first }.first - 500
-    val rightWall = rockPositions.maxBy { it.first }.first + 500
-    val ceiling = 0
-    val floor = rockPositions.maxBy { it.second }.second + 2
-
-    return (ceiling..floor).map { y ->
-        (leftWall..rightWall).map { x ->
-            when {
-                rockPositions.contains(x to y) -> "#"
-                x == 500 && y == 0 -> "+"
-                y == floor -> "#"
-                else -> "."
-            }
-        }.toMutableList()
+private fun Matrix.addWideFloor(width: Int, extraHeight: Int): Matrix = also {
+    val newLowPoint = values.flatMap { it.keys }.max() + extraHeight
+    (-width..width).forEach { x ->
+        put(x, newLowPoint, "#")
     }
 }
+
+private fun Matrix.get(x: Int, y: Int): String? = get(x)?.get(y)
+
+private fun Matrix.put(x: Int, y: Int, value: String) {
+    computeIfAbsent(x) { mutableMapOf() }[y] = value
+}
+
+typealias Matrix = MutableMap<Int, MutableMap<Int, String>>
+
+private fun deserializedInput(): MutableMap<Int, MutableMap<Int, String>> = input.split("\n")
+    .flatMap { line ->
+        line.split(" -> ").map {
+            it.substringBefore(",").toInt() to it.substringAfter(",").toInt()
+        }.windowed(2, 1).flatMap {
+            it[0].coordinatesBetween(it[1])
+        }
+    }.groupBy {
+        it.first
+    }.mapValues {
+        it.value.associate { it.second to "#" }.toMutableMap()
+    }.toMutableMap()
+
 
 private fun Pair<Int, Int>.coordinatesBetween(other: Pair<Int, Int>): List<Pair<Int, Int>> {
     return (min(this.first, other.first)..max(this.first, other.first)).map {
