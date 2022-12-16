@@ -10,53 +10,45 @@ fun main() {
 
 private fun solution1(): Int {
     val matrix = deserializedInput()
-    val lowestPoint = matrix.values.flatMap { it.keys }.max()
+    val voidThreshold = matrix.values.flatMap { it.keys }.max()
 
-    return matrix.simulateUntil { _, y ->
-        y > lowestPoint
-    }.values
-        .flatMap { it.values }
-        .count { it == "O" }
+    return matrix.simulateUntil { _, sandY ->
+        sandY > voidThreshold
+    }.countSand()
 }
 
 private fun solution2(): Int {
     val matrix = deserializedInput().addWideFloor(5000, 2)
     return matrix.simulateUntil { _, _ ->
-        matrix[500]?.get(0) == "O"
-    }.values
-        .flatMap { it.values }
-        .count { it == "O" }
+        matrix.sandSourceBlocked()
+    }.countSand()
 }
 
-private fun Matrix.simulateUntil(terminalCondition: (x: Int, y: Int) -> Boolean): Matrix {
-    val sandDropY = 0
-    val sandDropX = 500
+private fun Matrix.simulateUntil(terminalCondition: (sandX: Int, sandY: Int) -> Boolean): Matrix {
 
     tailrec fun dropSand(x: Int, y: Int): Matrix {
         if (terminalCondition(x, y)) return this
 
-        val nextY = y + 1
-
         return when {
-            get(x, nextY) == null -> dropSand(x, nextY)
-            get(x - 1, nextY) == null -> dropSand(x - 1, nextY)
-            get(x + 1, nextY) == null -> dropSand(x + 1, nextY)
+            get(x, y + 1) == null -> dropSand(x, y + 1)
+            get(x - 1, y + 1) == null -> dropSand(x - 1, y + 1)
+            get(x + 1, y + 1) == null -> dropSand(x + 1, y + 1)
             else -> {
-                put(x, y, "O")
-                dropSand(sandDropX, sandDropY)
+                put(x, y, SAND)
+                dropSand(SAND_SOURCE_X, SAND_SOURCE_Y)
             }
         }
     }
 
-    return dropSand(sandDropX, sandDropY)
+    return dropSand(SAND_SOURCE_X, SAND_SOURCE_Y)
 }
 
-private fun Matrix.addWideFloor(width: Int, extraHeight: Int): Matrix = also {
-    val newLowPoint = values.flatMap { it.keys }.max() + extraHeight
-    (-width..width).forEach { x ->
-        put(x, newLowPoint, "#")
-    }
-}
+private const val ROCK = "#"
+private const val SAND = "O"
+private const val SAND_SOURCE_X = 500
+private const val SAND_SOURCE_Y = 0
+
+typealias Matrix = MutableMap<Int, MutableMap<Int, String>>
 
 private fun Matrix.get(x: Int, y: Int): String? = get(x)?.get(y)
 
@@ -64,21 +56,29 @@ private fun Matrix.put(x: Int, y: Int, value: String) {
     computeIfAbsent(x) { mutableMapOf() }[y] = value
 }
 
-typealias Matrix = MutableMap<Int, MutableMap<Int, String>>
+private fun Matrix.countSand() = values
+    .flatMap { it.values }
+    .count { it == SAND }
 
-private fun deserializedInput(): MutableMap<Int, MutableMap<Int, String>> = input.split("\n")
+private fun Matrix.sandSourceBlocked() = get(SAND_SOURCE_X, SAND_SOURCE_Y) == SAND
+
+private fun Matrix.addWideFloor(width: Int, extraHeight: Int): Matrix = also {
+    val newLowPoint = values.flatMap { it.keys }.max() + extraHeight
+    (-width..width).forEach { x ->
+        put(x, newLowPoint, ROCK)
+    }
+}
+
+private fun deserializedInput(): Matrix = input.split("\n")
     .flatMap { line ->
         line.split(" -> ").map {
             it.substringBefore(",").toInt() to it.substringAfter(",").toInt()
         }.windowed(2, 1).flatMap {
             it[0].coordinatesBetween(it[1])
         }
-    }.groupBy {
-        it.first
-    }.mapValues {
+    }.groupBy { it.first }.mapValues {
         it.value.associate { it.second to "#" }.toMutableMap()
     }.toMutableMap()
-
 
 private fun Pair<Int, Int>.coordinatesBetween(other: Pair<Int, Int>): List<Pair<Int, Int>> {
     return (min(this.first, other.first)..max(this.first, other.first)).map {
